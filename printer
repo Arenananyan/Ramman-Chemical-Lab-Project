@@ -1,0 +1,63 @@
+#!/bin/sh
+# Manual control through the lab's existing printer controller.
+set -eu
+project=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+controller="$project/printer-control/printerctl"
+
+usage() {
+    cat <<'EOF'
+Usage:
+  printer connect PRINTER_IP       Open the shared connection (leave this tab open)
+  printer status                   Read the position and printer state
+  printer preview X Y Z [SPEED]    Check a move without moving
+  printer move X Y Z [SPEED]       Review and confirm a real move
+  printer demo X Y Z [SPEED]       Try the same workflow in simulation
+  printer stop                     Send the existing emergency stop command
+
+Set SSH_HOST to the same printer IP in the control tab. XYZ are in printer mm.
+SPEED is in mm/s and defaults to 5.
+EOF
+}
+
+require_address() {
+    case "${SSH_HOST:-}" in
+        ""|PRINTER_IP|printer_ip)
+            printf '%s\n' 'Use the actual IP shown on the printer network screen, for example 192.168.1.42.' >&2
+            exit 2
+            ;;
+    esac
+}
+
+case "${1:-}" in
+    ""|-h|--help)
+        usage
+        exit 0
+        ;;
+    connect)
+        if [ "$#" -ne 2 ]; then usage >&2; exit 2; fi
+        export SSH_HOST="$2"
+        require_address
+        exec "$controller" connect
+        ;;
+    status|stop)
+        if [ "$#" -ne 1 ]; then usage >&2; exit 2; fi
+        require_address
+        exec "$controller" "$1"
+        ;;
+    preview|move|demo)
+        if [ "$#" -lt 4 ] || [ "$#" -gt 5 ]; then usage >&2; exit 2; fi
+        action=$1
+        shift
+        set -- move "$1" "$2" "$3" --speed "${4:-5}"
+        case "$action" in
+            demo) exec "$controller" "$@" --mock ;;
+            preview) set -- "$@" --preview ;;
+        esac
+        require_address
+        exec "$controller" "$@"
+        ;;
+    *)
+        usage >&2
+        exit 2
+        ;;
+esac
