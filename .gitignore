@@ -10,3 +10,8 @@ reconstruction/
 *.heic
 *.HEIC
 *.log
+
+# Local Raman run outputs and machine profiles
+/runs/
+/profiles/machine.actual.json
+/profiles/*.local.json
