@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ramman Lab · Cameras</title>
+<link rel="stylesheet" href="style.css">
+<script src="app.js" defer></script>
+</head>
+<body><main>
+<header><p class="eyebrow">RAMMAN / CHEMICAL LAB</p><h1>Camera workspace</h1><p>Two viewpoints. One scene.</p></header>
+<section class="toolbar" aria-label="Camera controls">
+<button id="connect" class="primary">Connect cameras</button>
+<button id="refresh">Refresh devices</button>
+<button id="stop" disabled>Stop cameras</button>
+<p id="status" role="status" aria-live="polite">Connect to allow camera access, then choose two different devices.</p>
+</section>
+<section class="views" aria-label="Live cameras">
+<article><div class="heading"><h2>01 / Left view</h2><span id="left-info">Offline</span></div>
+<label for="left-device">Camera</label><select id="left-device" disabled><option value="">Connect to find cameras</option></select>
+<div class="viewport"><video id="left-video" autoplay muted playsinline aria-label="Left webcam preview"></video><p id="left-empty">Waiting for left camera</p></div></article>
+<article><div class="heading"><h2>02 / Right view</h2><span id="right-info">Offline</span></div>
+<label for="right-device">Camera</label><select id="right-device" disabled><option value="">Connect to find cameras</option></select>
+<div class="viewport"><video id="right-video" autoplay muted playsinline aria-label="Right webcam preview"></video><p id="right-empty">Waiting for right camera</p></div></article>
+</section>
+<section class="capture-bar"><div><h2>Capture a pair</h2><p>Save both current frames together or as individual PNGs.</p><small>Browser captures are approximate in time. Hardware synchronization requires camera support.</small></div><button id="capture" class="primary" disabled>Capture pair ↗</button></section>
+<section id="result" hidden><div class="heading"><h2>Latest capture</h2><div class="downloads"><a id="pair-download" download>Download pair</a><a id="left-download" download>Left PNG</a><a id="right-download" download>Right PNG</a></div></div><p id="details"></p><img id="preview" alt="Latest captured pair"></section>
+<footer>Camera frames stay in this browser until you download them.</footer>
+</main></body>
+</html>
