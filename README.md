@@ -4,6 +4,19 @@ Estimate the dimensions and position of an upright cylinder from a calibrated pa
 
 ## Vision
 
+### Two live webcams
+
+From the repository root, start the local camera page with `python3 webcams/serve.py`,
+then open [localhost:8768](http://localhost:8768) in Safari or Chrome. Click
+**Connect cameras** and allow camera access. The page prefers the two A4tech
+webcams and offers a separate selector for each view. Close other apps using
+the cameras if a device cannot start.
+
+**Capture pair** freezes both previews and provides downloads for the combined
+PNG and the original-size left and right PNGs. Capture times are approximate,
+without hardware synchronization. Frames stay in the browser. Stop the cameras
+with **Stop cameras**, and stop the local server with Ctrl-C in Terminal.
+
 Install the Python dependencies and run the synthetic tests.
 
 ```sh
