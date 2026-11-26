@@ -17,6 +17,45 @@ PNG and the original-size left and right PNGs. Capture times are approximate,
 without hardware synchronization. Frames stay in the browser. Stop the cameras
 with **Stop cameras**, and stop the local server with Ctrl-C in Terminal.
 
+### Lab setup and reference coordinates
+
+On the Linux PC with both A4Tech webcams connected, run
+`python3 webcams/serve.py` from the repository root. Open
+[localhost:8768](http://localhost:8768), click **Connect cameras**, then run
+`./camera-exposure.sh` in another terminal from the repository root. The
+script uses USB ports 1 and 2 on the lab PC and sets both cameras to manual
+exposure (80) and gain 0. If a camera resets, run the script again after
+reconnecting. On Debian or Ubuntu, install `v4l-utils` if needed. Check
+`ls -l /dev/v4l/by-path/` if the USB paths differ on another host.
+
+The saved eight-pair calibration is
+[`vision/raman-a4tech-20261124.json`](vision/raman-a4tech-20261124.json).
+Use images at **1024 × 576 per camera** with the same camera mounting,
+framing, and focus. The first view shows the printer head assembly to the
+right of the bed. The second shows it to the left. Check the image content
+when assigning the views, since the browser can swap camera order. Supply
+the file as `--calibration raman-a4tech-20261124.json` when running the
+vision commands from `vision/`.
+
+| Reference | Coordinates or height (mm) |
+| --- | --- |
+| Recorded base-case toolhead position in printer coordinates | X = 120.0, Y = 222.94, Z = 200.0 |
+| Graph-paper origin used by the stereo calibration | X = 0, Y = 0 at the marked black dot |
+| Graph-paper surface in the stereo frame | Z = 0 |
+| Tall validation target, measured above the paper | 83 |
+| Short validation target, measured above the paper | 27 |
+
+The base-case position records a past printer setup. The printer's actual
+homing position is a separate reference. Stereo Z is height above the paper.
+Before converting it to printer Z, verify the stock nozzle's paper-surface
+reference after homing. Measure the Raman probe's working-distance offset
+when it is installed. Verify the bed registration and repeat a known-height
+check if the bed pose or the camera framing changes.
+
+The eight-pair fit measured the 27 mm target within about 2 mm in the
+tested placements. A separate cup-rim check after rehoming gave 27.1 mm
+from stereo and 27 mm by caliper. These checks apply to the tested points.
+
 Install the Python dependencies and run the synthetic tests.
 
 ```sh
