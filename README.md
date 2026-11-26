@@ -12,6 +12,16 @@ then open [localhost:8768](http://localhost:8768) in Safari or Chrome. Click
 webcams and offers a separate selector for each view. Close other apps using
 the cameras if a device cannot start.
 
+Use **Digital exposure** to adjust both previews and their saved PNGs together.
+The default of 100% leaves the image data unchanged.
+
+The local server applies the hardware preset at startup and again after
+**Connect cameras**. On this Mac, `bash camera-exposure-macos.sh` uses the two
+A4Tech cameras at USB locations `00130000` and `00140000`. It uses Apple's
+Command Line Tools and reads back manual mode, exposure 80, and gain 0.
+If the cameras move to another hub or port, check `ioreg -p IOUSB -w0` and
+update the location IDs in that script.
+
 **Capture pair** freezes both previews and provides downloads for the combined
 PNG and the original-size left and right PNGs. Capture times are approximate,
 without hardware synchronization. Frames stay in the browser. Stop the cameras
@@ -21,8 +31,8 @@ with **Stop cameras**, and stop the local server with Ctrl-C in Terminal.
 
 On the Linux PC with both A4Tech webcams connected, run
 `python3 webcams/serve.py` from the repository root. Open
-[localhost:8768](http://localhost:8768), click **Connect cameras**, then run
-`./camera-exposure.sh` in another terminal from the repository root. The
+[localhost:8768](http://localhost:8768) and click **Connect cameras**. The
+server runs `camera-exposure.sh` automatically. The
 script uses USB ports 1 and 2 on the lab PC and sets both cameras to manual
 exposure (80) and gain 0. If a camera resets, run the script again after
 reconnecting. On Debian or Ubuntu, install `v4l-utils` if needed. Check
@@ -185,3 +195,87 @@ template targets the original Moonraker adapter. See the
 Validation for this import covered 31 scanner tests and a completed 25-position
 simulation. A Node.js report check exercised map selection, raw and corrected
 signal display, and CSV download using a mocked browser document and canvas.
+
+## Arduino pump control
+
+Upload [timed_pump.ino](pump-control/timed_pump/timed_pump.ino) to the Arduino
+Nano (ATmega328P). The sketch drives the active-low pump output on D9 and
+communicates over USB serial at 9600 baud. Close Arduino Serial Monitor
+before connecting with Python. From the repository root:
+
+```sh
+python3 -m venv .venv
+./.venv/bin/python -m pip install -r pump-control/requirements.txt
+./.venv/bin/python pump-control/pump.py --port /dev/cu.usbserial-110 off
+```
+
+Use the port shown in the Arduino IDE if the device name changes. `off` checks
+communication by asking the Nano to switch the output off. With the tubing
+aimed into a cup for a supervised water test, try a half-second pulse.
+
+```sh
+./.venv/bin/python pump-control/pump.py --port /dev/cu.usbserial-110 pulse 0.5
+```
+
+The Nano accepts pulses from 0.1 to 2 seconds, switches the output off when
+its timer expires, and then reports completion. The timer runs even if the
+USB serial link drops while the Nano stays powered. The reported completion
+describes the output state. Measure the dispensed liquid separately.
+
+## Experiment desk
+
+Start the local server and open [localhost:8768](http://localhost:8768).
+Select **Simulation**, click **Start demo**, and answer **yes** or **no** when
+the coordinator asks about the head position. The workflow has Vision,
+Motion, and Pump handlers, and uses the existing mocked printer in simulation.
+
+```sh
+./.venv/bin/python -m pip install -r vision/requirements.txt -r pump-control/requirements.txt
+./.venv/bin/python webcams/serve.py
+```
+
+Set `GROQ_API_KEY` in the server's environment to enable natural-language
+chat and the camera-to-motion handoff. The default model is
+`openai/gpt-oss-20b`. Use `GROQ_MODEL` to select another Groq model with
+strict JSON Schema support. Groq receives operator messages, run state, and
+the numeric fit and target for the handoff. The webcam frames stay local.
+For a fitted cylinder, Groq can propose positioning at the fixed target or
+hold the run. The existing controller validates motion and requires the
+operator's position approval before pumping. Without a key, the desk
+accepts its original local commands.
+
+For live use, verify the stereo calibration at 1024 × 576 with a measured
+reference in the current camera mounting. The left selector must show the
+head assembly to the right of the bed in the reference pose, matching the
+first calibration view. The right selector must show the other view.
+
+Create `profiles/experiment.local.json` using a measured camera-field to
+printer registration. This template identifies the measurements to supply.
+
+```json
+{
+  "verified_for_live": false,
+  "field_bounds_mm": [null, null, null, null],
+  "printer_xy_from_field": [[null, null, null], [null, null, null]],
+  "printer_z_at_paper_mm": null,
+  "clearance_z_mm": null
+}
+```
+
+The bounds are field X min/max followed by Y min/max. Each transform row
+multiplies field X, field Y, and 1 to give printer X or Y. Measure the XY
+transform for the dispensing tip. The paper reference is the commanded
+printer Z when that tip touches the paper. Choose a clearance Z whose
+full XY travel path is clear. Verify the measured mapping and path before
+setting `verified_for_live` to true.
+
+Open the existing printer SSH connection and launch the webpage server
+with `SSH_HOST` set to the printer address and `PRINTER_ALLOW_MOTION=1`.
+The pump port defaults to `/dev/cu.usbserial-110` and can be set with
+`PUMP_PORT` when launching the server.
+
+Live mode fits one upright cylinder from raw stereo frames. The head moves
+at 5 mm/s through the verified clearance and stops 10 mm above the fitted
+top. The controller rechecks the position after approval, then requests a
+single 0.5-second water pulse. The position approval expires after two minutes.
+The input frames, fit, and overlay are saved under `runs/experiment/`.

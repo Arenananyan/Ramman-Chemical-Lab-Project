@@ -4,10 +4,14 @@ const sides = ["left", "right"];
 const el = id => document.getElementById(id);
 const selects = Object.fromEntries(sides.map(side => [side, el(side + "-device")]));
 const videos = Object.fromEntries(sides.map(side => [side, el(side + "-video")]));
+const displays = Object.fromEntries(sides.map(side => [side, el(side + "-display")]));
 const streams = {left: null, right: null};
+const exposure = el("exposure");
 let generation = 0;
 let busy = false;
 let urls = [];
+let previewRequest = null;
+let lastPreview = -Infinity;
 
 function message(text, error = false) {
   el("status").textContent = text;
@@ -27,6 +31,7 @@ function stopSide(side) {
   streams[side]?.getTracks().forEach(track => track.stop());
   streams[side] = null;
   videos[side].srcObject = null;
+  displays[side].hidden = true;
   el(side + "-empty").hidden = false;
   el(side + "-info").textContent = "Offline";
 }
@@ -65,9 +70,13 @@ async function listDevices() {
 }
 async function open(side, id, run) {
   if (!id) return;
+  const calibrated = el("camera-resolution").value === "calibrated";
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: false,
-    video: {deviceId: {exact: id}, width: {ideal: 1920}, height: {ideal: 1080}, frameRate: {ideal: 30}}
+    video: {
+      deviceId: {exact: id}, width: calibrated ? {exact: 1024} : {ideal: 1920},
+      height: calibrated ? {exact: 576} : {ideal: 1080}, frameRate: {ideal: 30}
+    }
   });
   if (run !== generation) {
     stream.getTracks().forEach(track => track.stop());
@@ -87,6 +96,7 @@ async function open(side, id, run) {
   const settings = track.getSettings();
   el(side + "-info").textContent = settings.width + " × " + settings.height;
   el(side + "-empty").hidden = true;
+  updateExposure();
 }
 async function connect() {
   if (busy) return;
@@ -110,8 +120,19 @@ async function connect() {
     if (run !== generation) return;
     await open("right", selects.right.value, run);
     if (run !== generation) return;
-    message(cameras.length < 2 ? "Only one camera is available. Connect a second webcam for paired capture." :
-      "Both cameras are live. Choose devices above to change viewpoints.");
+    const status = cameras.length < 2
+      ? "Only one camera is available. Connect a second webcam for paired capture."
+      : "Both cameras are live.";
+    message(status + " Applying the lab exposure preset…");
+    let applied = false;
+    try {
+      applied = (await fetch("/camera-exposure", {method: "POST"})).ok;
+    } catch {
+      // Camera streaming can continue even if the local preset is unavailable.
+    }
+    if (run !== generation) return;
+    message(status + (applied ? " Lab exposure preset applied." :
+      " Lab exposure preset unavailable. See the server terminal for details."), !applied);
   } catch (error) {
     if (run === generation) message(explain(error), true);
   } finally {
@@ -131,6 +152,23 @@ for (const side of sides) {
 function png(canvas) {
   return new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("Image encoding failed.")), "image/png"));
 }
+function drawExposure(canvas, video, brightness) {
+  const {width, height} = canvas;
+  const context = canvas.getContext("2d");
+  context.save();
+  if (brightness < 1) {
+    context.fillStyle = "#000";
+    context.fillRect(0, 0, width, height);
+    context.globalAlpha = brightness;
+  }
+  context.drawImage(video, 0, 0, width, height);
+  if (brightness > 1) {
+    context.globalCompositeOperation = "lighter";
+    context.globalAlpha = brightness - 1;
+    context.drawImage(video, 0, 0, width, height);
+  }
+  context.restore();
+}
 async function capture() {
   if (el("capture").disabled) return;
   const run = generation;
@@ -138,11 +176,12 @@ async function capture() {
   buttons();
   try {
     // Draw both frames in one event-loop turn before encoding either image.
+    const brightness = exposure.valueAsNumber / 100;
     const frames = sides.map(side => {
       const canvas = document.createElement("canvas");
       canvas.width = videos[side].videoWidth;
       canvas.height = videos[side].videoHeight;
-      canvas.getContext("2d").drawImage(videos[side], 0, 0);
+      drawExposure(canvas, videos[side], brightness);
       return canvas;
     });
     const pair = document.createElement("canvas");
@@ -174,8 +213,43 @@ async function capture() {
   }
 }
 el("connect").addEventListener("click", connect);
+el("camera-resolution").addEventListener("change", () => {
+  if (sides.some(live)) connect();
+});
 el("stop").addEventListener("click", stop);
 el("capture").addEventListener("click", capture);
+function renderPreviews(now) {
+  previewRequest = null;
+  const brightness = exposure.valueAsNumber / 100;
+  if (brightness === 1 || !sides.some(live)) {
+    for (const display of Object.values(displays)) display.hidden = true;
+    return;
+  }
+  if (now - lastPreview >= 33) {
+    lastPreview = now;
+    for (const side of sides) {
+      const video = videos[side];
+      if (!live(side) || video.readyState < 2 || !video.videoWidth) continue;
+      const display = displays[side];
+      const width = Math.min(video.videoWidth, 960, video.clientWidth || video.videoWidth);
+      const height = Math.max(1, Math.round(width * video.videoHeight / video.videoWidth));
+      if (display.width !== width) display.width = width;
+      if (display.height !== height) display.height = height;
+      drawExposure(display, video, brightness);
+      display.hidden = false;
+    }
+  }
+  previewRequest = requestAnimationFrame(renderPreviews);
+}
+function updateExposure() {
+  el("exposure-info").value = exposure.value + "%";
+  if (previewRequest !== null) cancelAnimationFrame(previewRequest);
+  lastPreview = -Infinity;
+  renderPreviews(performance.now());
+}
+exposure.addEventListener("input", updateExposure);
+exposure.addEventListener("change", updateExposure);
+updateExposure();
 el("refresh").addEventListener("click", async () => {
   try {
     await listDevices();

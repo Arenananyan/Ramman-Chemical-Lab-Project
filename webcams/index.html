@@ -3,28 +3,71 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ramman Lab · Cameras</title>
-<link rel="stylesheet" href="style.css">
-<script src="app.js" defer></script>
+<title>Ramman Lab · Experiment desk</title>
+<link rel="stylesheet" href="style.css?v=experiment-1">
+<script src="app.js?v=experiment-1" defer></script>
+<script src="experiment.js?v=groq-1" defer></script>
 </head>
 <body><main>
-<header><p class="eyebrow">RAMMAN / CHEMICAL LAB</p><h1>Camera workspace</h1><p>Two viewpoints. One scene.</p></header>
+<header><p class="eyebrow">RAMMAN / CHEMICAL LAB</p><h1>Experiment desk</h1></header>
+<div class="desk">
+<section class="experiment" aria-labelledby="experiment-title">
+  <div class="heading"><h2 id="experiment-title">Experiment chat</h2><span id="run-phase">Ready</span></div>
+  <p class="experiment-note" id="experiment-engine"></p>
+  <label for="experiment-mode">Run mode</label>
+  <select id="experiment-mode">
+    <option value="simulation">Simulation</option>
+    <option value="live" disabled>Live hardware</option>
+  </select>
+  <p class="experiment-note" id="experiment-availability"></p>
+  <label id="live-check" hidden><input id="live-confirmed" type="checkbox">
+    I checked camera order, placed the water-test cylinder, and cleared the lift and travel path.
+  </label>
+  <div class="chat-log" id="chat-log" role="log" aria-label="Experiment messages">
+    <div class="chat-line"><strong>Coordinator</strong><p>Start a demo to locate the object and position the head. I’ll ask you to check the position before the pump runs.</p></div>
+  </div>
+  <div class="chat-actions">
+    <button id="start-demo" class="primary" type="button">Start demo</button>
+    <div id="position-check" hidden>
+      <button id="approve-position" class="primary" type="button">Yes, position is right</button>
+      <button id="reject-position" type="button">No, cancel run</button>
+    </div>
+  </div>
+  <form id="chat-form">
+    <label for="chat-input">Message the coordinator</label>
+    <div class="chat-input"><input id="chat-input" placeholder="Type a message" maxlength="120" required>
+    <button type="submit">Send</button></div>
+  </form>
+</section>
+<div class="camera-desk">
 <section class="toolbar" aria-label="Camera controls">
 <button id="connect" class="primary">Connect cameras</button>
 <button id="refresh">Refresh devices</button>
 <button id="stop" disabled>Stop cameras</button>
+<label for="camera-resolution">Camera resolution</label>
+<select id="camera-resolution">
+  <option value="preview">High-resolution preview</option>
+  <option value="calibrated">Calibrated pair · 1024 × 576</option>
+</select>
+<div class="exposure">
+  <label for="exposure">Digital exposure · both cameras</label>
+  <input id="exposure" type="range" min="25" max="200" step="1" value="100">
+  <output id="exposure-info" for="exposure">100%</output>
+</div>
 <p id="status" role="status" aria-live="polite">Connect to allow camera access, then choose two different devices.</p>
 </section>
 <section class="views" aria-label="Live cameras">
 <article><div class="heading"><h2>01 / Left view</h2><span id="left-info">Offline</span></div>
 <label for="left-device">Camera</label><select id="left-device" disabled><option value="">Connect to find cameras</option></select>
-<div class="viewport"><video id="left-video" autoplay muted playsinline aria-label="Left webcam preview"></video><p id="left-empty">Waiting for left camera</p></div></article>
+<div class="viewport"><video id="left-video" autoplay muted playsinline aria-label="Left webcam preview"></video><canvas id="left-display" class="digital-display" aria-hidden="true" hidden></canvas><p id="left-empty">Waiting for left camera</p></div></article>
 <article><div class="heading"><h2>02 / Right view</h2><span id="right-info">Offline</span></div>
 <label for="right-device">Camera</label><select id="right-device" disabled><option value="">Connect to find cameras</option></select>
-<div class="viewport"><video id="right-video" autoplay muted playsinline aria-label="Right webcam preview"></video><p id="right-empty">Waiting for right camera</p></div></article>
+<div class="viewport"><video id="right-video" autoplay muted playsinline aria-label="Right webcam preview"></video><canvas id="right-display" class="digital-display" aria-hidden="true" hidden></canvas><p id="right-empty">Waiting for right camera</p></div></article>
 </section>
 <section class="capture-bar"><div><h2>Capture a pair</h2><p>Save both current frames together or as individual PNGs.</p><small>Browser captures are approximate in time. Hardware synchronization requires camera support.</small></div><button id="capture" class="primary" disabled>Capture pair ↗</button></section>
 <section id="result" hidden><div class="heading"><h2>Latest capture</h2><div class="downloads"><a id="pair-download" download>Download pair</a><a id="left-download" download>Left PNG</a><a id="right-download" download>Right PNG</a></div></div><p id="details"></p><img id="preview" alt="Latest captured pair"></section>
-<footer>Camera frames stay in this browser until you download them.</footer>
+</div>
+</div>
+<footer>Live experiments save the input frames and fit to this computer.</footer>
 </main></body>
 </html>
