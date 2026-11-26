@@ -267,6 +267,9 @@ def make_target(args):
 def calibrate(args):
     if len(args.pair) < 8:
         raise ValueError("Provide at least eight calibration pairs with varied target positions and tilts.")
+    field_origin = np.asarray(args.field_origin_mm, dtype=np.float64)
+    if not np.isfinite(field_origin).all():
+        raise ValueError("The target origin in bed coordinates must be finite.")
     board = charuco(args)
     detector = cv2.aruco.CharucoDetector(board)
     corners_world = board.getChessboardCorners().copy()
@@ -307,7 +310,10 @@ def calibrate(args):
     )
     left_ids, left_xy = detect(args.field[0])
     right_ids, right_xy = detect(args.field[1])
-    ok, r1, t1 = cv2.solvePnP(corners_world[left_ids], left_xy, k1, d1)
+    # For the flat field pair, the target's top-left pattern corner can be
+    # offset from the bed origin. Target +X is right and +Y is up the pattern.
+    field_corners = corners_world + field_origin
+    ok, r1, t1 = cv2.solvePnP(field_corners[left_ids], left_xy, k1, d1)
     if not ok:
         raise ValueError("Cannot locate the flat field target.")
     rotation = cv2.Rodrigues(r1)[0]
@@ -316,10 +322,10 @@ def calibrate(args):
     checks = []
     for camera, ids, observed in ((left, left_ids, left_xy), (right, right_ids, right_xy)):
         center = -camera.rotation.T @ camera.translation
-        if center[2] <= 0:
+        if center[2] <= field_origin[2]:
             raise ValueError("The field target must face the cameras.")
         projected, _ = cv2.projectPoints(
-            corners_world[ids], cv2.Rodrigues(camera.rotation)[0],
+            field_corners[ids], cv2.Rodrigues(camera.rotation)[0],
             camera.translation, camera.matrix, camera.distortion,
         )
         checks.append(float(np.sqrt(np.mean(np.sum((projected[:, 0] - observed)**2, axis=1)))))
@@ -329,6 +335,7 @@ def calibrate(args):
     result = {
         "image_size": image_size,
         "cameras": [left.as_dict(), right.as_dict()],
+        "field_target_origin_mm": field_origin.tolist(),
         "reprojection_rms_px": dict(zip(("left", "right", "stereo", "field_left", "field_right"), errors)),
     }
     args.output.write_text(json.dumps(result, indent=2) + "\n")
@@ -402,6 +409,8 @@ def main():
     target_arguments(setup)
     setup.add_argument("--pair", nargs=2, action="append", required=True, metavar=("LEFT", "RIGHT"))
     setup.add_argument("--field", nargs=2, required=True, metavar=("LEFT", "RIGHT"))
+    setup.add_argument("--field-origin-mm", type=float, nargs=3, default=(0, 0, 0),
+                       metavar=("X", "Y", "Z"), help="bed coordinates of the flat target's top-left pattern corner")
     setup.set_defaults(run=calibrate)
 
     reconstruction = commands.add_parser("scan", help="reconstruct a colored PLY mesh from one pair")
