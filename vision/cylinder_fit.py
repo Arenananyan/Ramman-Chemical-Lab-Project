@@ -3,6 +3,7 @@
 import argparse
 from dataclasses import dataclass
 import json
+import math
 from pathlib import Path
 
 import cv2
@@ -51,10 +52,13 @@ class View:
                          borderMode=cv2.BORDER_CONSTANT, borderValue=100).ravel()
 
 
-def suppress_board_edges(views, bounds):
+def suppress_board_edges(views, bounds, max_height):
     """Reject texture that agrees between views when projected onto Z=0."""
     blurred = [cv2.GaussianBlur(view.image, (0, 0), 4).astype(np.float32) for view in views]
     planes = [view.projection[:, [0, 1, 3]] for view in views]
+    floor = field_outline(bounds)
+    volume = np.vstack((floor, floor + (0, 0, max_height)))
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (17, 17))
     for index, view in enumerate(views):
         other = 1 - index
         homography = planes[index] @ np.linalg.inv(planes[other])
@@ -63,20 +67,34 @@ def suppress_board_edges(views, bounds):
         delta = np.max(np.abs(blurred[index] - aligned), axis=2)
         delta = cv2.boxFilter(delta, -1, (15, 15))
         field = np.zeros(view.image.shape[:2], dtype=np.uint8)
-        board = np.rint(view.project(field_outline(bounds))).astype(np.int32)
+        board = np.rint(view.project(floor)).astype(np.int32)
         cv2.fillConvexPoly(field, board, 1)
         if not field.any():
             raise ValueError("The calibrated field is outside an image.")
         board_color = np.median(blurred[index][field != 0], axis=0)
-        contrast = np.max(np.abs(blurred[index] - board_color), axis=2)
-        foreground = ((delta > 12) & (contrast > 20) & (field != 0)).astype(np.uint8)
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (17, 17))
-        foreground = cv2.morphologyEx(foreground, cv2.MORPH_CLOSE, kernel)
+        contrast = np.max(np.abs(view.image - board_color), axis=2)
+        search_area = np.zeros_like(field)
+        hull = cv2.convexHull(np.rint(view.project(volume)).astype(np.int32))
+        cv2.fillConvexPoly(search_area, hull, 1)
+        # Parallax on the board locates raised objects. Grow those regions
+        # through contrasting pixels so their full silhouettes can extend
+        # outside the image of the flat board or across gaps in parallax.
+        contrasting = (contrast > 20) & (search_area != 0)
+        outside = view.image[(search_area == 0) & (field == 0)]
+        if len(outside):
+            # The area beyond the bed can have a different background color.
+            backdrop = np.median(outside, axis=0)
+            outside_contrast = np.max(np.abs(view.image - backdrop), axis=2)
+            contrasting &= (field != 0) | (outside_contrast > 20)
+        contrasting = contrasting.astype(np.uint8)
+        contrasting = cv2.morphologyEx(contrasting, cv2.MORPH_CLOSE, kernel)
+        _, labels = cv2.connectedComponents(contrasting)
+        seeds = (delta > 12) & (field != 0)
+        seed_areas = np.bincount(labels[seeds], minlength=int(labels.max()) + 1)
+        seed_areas[0] = 0
+        foreground = (seed_areas[labels] >= 120).astype(np.uint8)
         contours, _ = cv2.findContours(foreground, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        foreground[:] = 0
-        for contour in contours:
-            if cv2.contourArea(contour) >= 120:
-                cv2.drawContours(foreground, [contour], -1, 1, cv2.FILLED)
+        cv2.drawContours(foreground, contours, -1, 1, cv2.FILLED)
         near_object = cv2.dilate(foreground, kernel) != 0
         keep = ((view.distance < .01) & (near_object | (field == 0))).astype(np.uint8)
         view.distance = cv2.distanceTransform(1 - keep, cv2.DIST_L2, cv2.DIST_MASK_PRECISE)
@@ -253,7 +271,7 @@ def fit_cylinder(views, bounds, radius_range, height_range):
     xmin, xmax, ymin, ymax = bounds
     lower = np.array((xmin, ymin, radius_range[0], height_range[0]))
     upper = np.array((xmax, ymax, radius_range[1], height_range[1]))
-    suppress_board_edges(views, bounds)
+    suppress_board_edges(views, bounds, height_range[1])
 
     def inside(params):
         x, y, r, _ = params
@@ -305,7 +323,11 @@ def fit_cylinder(views, bounds, radius_range, height_range):
     refined = refine_exterior(params, views, lower, upper)
     if inside(refined):
         refined_evidence = metrics(refined, views)
-        if all(m["silhouette_iou"] >= .65 and m["rim_coverage"] >= .55 for m in refined_evidence):
+        # Short silhouettes can give poor side-only estimates. Keep the
+        # original fit if refinement makes the full two-view fit worse.
+        if quality(refined_evidence) >= score and all(
+            m["silhouette_iou"] >= .65 and m["rim_coverage"] >= .68 for m in refined_evidence
+        ):
             return refined, refined_evidence
     return params, evidence
 
@@ -340,7 +362,37 @@ def save_overlay(path, views, bounds, params=None, reason=None, originals=None):
     path.write_bytes(encoded.tobytes())
 
 
+def compare_reference(data, dimensions, center, tolerance):
+    reference, measured = {}, {}
+    if dimensions is not None:
+        reference.update(zip(("diameter_mm", "height_mm"), dimensions))
+        measured.update(diameter_mm=data["diameter_mm"], height_mm=data["height_mm"])
+    if center is not None:
+        reference.update(zip(("center_x_mm", "center_y_mm"), center))
+        measured.update(zip(("center_x_mm", "center_y_mm"), data["base_center_mm"][:2]))
+    signed_errors = {key: measured[key] - value for key, value in reference.items()}
+    result = {"reference_mm": reference, "signed_errors_mm": signed_errors}
+    errors = [abs(signed_errors[key]) for key in ("diameter_mm", "height_mm") if key in signed_errors]
+    if center is not None:
+        result["center_error_mm"] = math.hypot(signed_errors["center_x_mm"], signed_errors["center_y_mm"])
+        errors.append(result["center_error_mm"])
+    if tolerance is not None:
+        result.update(max_error_mm=tolerance, passed=max(errors) <= tolerance)
+    return result
+
+
 def run(args):
+    dimensions = args.reference_dimensions_mm
+    center = args.reference_center_mm
+    tolerance = args.max_error_mm
+    if dimensions is not None and not all(math.isfinite(value) and value > 0 for value in dimensions):
+        raise ValueError("Reference diameter and height must be finite and positive.")
+    if center is not None and not all(math.isfinite(value) for value in center):
+        raise ValueError("Reference center coordinates must be finite.")
+    if tolerance is not None and (
+        not math.isfinite(tolerance) or tolerance <= 0 or (dimensions is None and center is None)
+    ):
+        raise ValueError("A positive maximum error requires independently measured reference dimensions or center.")
     paths = args.left, args.right
     config = json.loads(args.calibration.read_text())
     check_source_images(config, paths, "Calibration")
@@ -388,9 +440,22 @@ def run(args):
         "views": [dict(image=path.name, analysis_width_px=view.image.shape[1], **score)
                   for path, view, score in zip(paths, views, evidence)],
     }
+    reference_check = None
+    if dimensions is not None or center is not None:
+        reference_check = compare_reference(data, dimensions, center, tolerance)
+        data["reference_check"] = reference_check
     measurements.write_text(json.dumps(data, indent=2) + "\n")
     print(f"Base center ({x:.2f}, {y:.2f}, 0) mm, diameter {2*radius:.2f} mm, height {height:.2f} mm.")
     print(f"Saved {mesh_path}, {measurements} and {overlay}.")
+    if reference_check is not None:
+        errors = reference_check["signed_errors_mm"]
+        print("Reference errors: " + ", ".join(f"{key[:-3]} {error:+.3f} mm" for key, error in errors.items()))
+        if "center_error_mm" in reference_check:
+            print(f"XY center distance: {reference_check['center_error_mm']:.3f} mm.")
+        if tolerance is not None:
+            if not reference_check["passed"]:
+                raise ValueError(f"Reference check failed at {tolerance:g} mm. See {measurements}.")
+            print(f"Reference check passed at {tolerance:g} mm.")
 
 
 def main():
@@ -403,6 +468,12 @@ def main():
     parser.add_argument("--radius-range", type=float, nargs=2, default=(6, 40), metavar=("MIN", "MAX"))
     parser.add_argument("--height-range", type=float, nargs=2, default=(10, 120), metavar=("MIN", "MAX"))
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--reference-dimensions-mm", type=float, nargs=2, metavar=("DIAMETER", "HEIGHT"),
+                        help="independently measured cylinder diameter and height")
+    parser.add_argument("--reference-center-mm", type=float, nargs=2, metavar=("X", "Y"),
+                        help="independently measured cylinder center in the calibrated field coordinates")
+    parser.add_argument("--max-error-mm", type=float,
+                        help="fail the reference check if a dimension or the XY center distance exceeds this error")
     args = parser.parse_args()
     try:
         run(args)

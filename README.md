@@ -76,6 +76,72 @@ python cylinder_fit.py ../inputs/left.jpg ../inputs/right.jpg \
 
 Replace the example bounds with your measured field bounds. This produces a PLY with the cylinder and field, a JSON with the measured parameters, and an image showing the projected edges. Use `stereo_scan.py target --help` and `stereo_scan.py calibrate --help` to calibrate a fixed pair. Use `grid_pose.py --help` to estimate new poses with a known lens and marked grid anchors. The included JSON examples refer to earlier captures. Supply your own images and calibration. The project has yet to demonstrate 0.1 mm physical accuracy.
 
+### Calibrate the webcams to the bed
+
+The cameras stay fixed while you capture the ChArUco target. Capture at
+least eight pairs with the target held still at different positions and tilts,
+including across the image. Use **Capture pair** and save the individual left
+and right PNGs from the webcam page. Keep the same camera order, resolution,
+and focus for calibration and subsequent scans.
+
+Capture one more pair with the target flat on the bed. Align its bottom edge
+with bed +X and its left edge with bed +Y. The calibration command accepts the
+bed coordinates of the **top-left pattern corner**, excluding the white margin.
+With the bottom-left pattern corner at bed (0, 0), the default 7 × 5 target
+puts the top-left at (0, 125) mm. Use the height of the printed face above the
+bed as the third coordinate. If you place the target elsewhere, measure the
+top-left corner's coordinates in the same bed frame and use them instead.
+
+From the repository root, this example uses eight pairs saved as
+`inputs/calibration/01-left.png` through `08-right.png`. Set the Z value to your
+measured target thickness before running the command.
+
+```bash
+pairs=()
+for i in {01..08}; do
+  pairs+=(--pair "inputs/calibration/${i}-left.png" "inputs/calibration/${i}-right.png")
+done
+python3 vision/stereo_scan.py calibrate "${pairs[@]}" \
+  --field inputs/calibration/bed-left.png inputs/calibration/bed-right.png \
+  --field-origin-mm 0 125 0 --output inputs/calibration/bed-calibration.json
+```
+
+Print the target at actual size and verify the square spacing with a ruler or
+caliper. The calibration estimates the camera positions and orientations from
+the images. Its reprojection errors are in pixels. Use an independently
+measured object to check how those errors translate into millimeters.
+
+### Check accuracy on the lab setup
+
+Capture the same stationary reference cylinder with both calibrated cameras.
+Keep the calibration resolution, camera order, focus, and mounts fixed. Measure
+the cylinder's diameter and height independently and supply the values when you
+run the fit from `vision/`. For example, for a 40.4 mm diameter and 53.3 mm height:
+
+```sh
+python cylinder_fit.py ../inputs/left.png ../inputs/right.png \
+  --calibration calibration.json --field-bounds 0 235 0 235 \
+  --reference-dimensions-mm 40.4 53.3 --output-dir ../reconstruction/reference-01
+```
+
+Use the measured bounds of your own field. If you have an independently
+measured center in the calibration frame, add `--reference-center-mm X Y`.
+The CLI reports signed errors and writes them to `measurements.json`. Add
+`--max-error-mm` with your acceptance tolerance for a pass/fail check of each
+dimension and the XY center distance, when supplied. A failed check exits with
+status 2 and keeps the measurements and overlay for inspection.
+
+Capture several pairs at each tested position to check repeatability. Use
+the center and different parts of the bed to check how error varies across the
+field. Keep the reference measurements independent of the camera fit.
+
+On 23 November 2026, all seven vision tests passed with the system Python
+packages. The cylinder fitter accepted 13 of 13 rendered cases after the
+foreground and refinement fixes, compared with 5 of 13 before. Largest errors
+in the revised fits were 0.238 mm for XY center distance, 0.754 mm for diameter,
+and 0.107 mm for height. These tests used known synthetic camera geometry.
+Physical accuracy still needs measured reference captures from the lab.
+
 ## Manual printer control
 
 From the repository root, run `./printer demo 105 100 5 60` for a simulated horizontal move.
