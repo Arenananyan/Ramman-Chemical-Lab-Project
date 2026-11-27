@@ -1,0 +1,131 @@
+{
+  "stereo_calibration": "raman-a4tech-20261124.json",
+  "description": "Registration for the November 27 camera framing and graph-paper placement, with printer Y at 222.94 mm during capture. Multiply the 3x4 matrix by [stereo X, stereo Y, stereo Z, 1] to obtain stock-nozzle printer XYZ in mm. The matrix includes the stereo height correction and the measured paper-to-printer Z offset. Use the stereo calibration coordinate frame. Check registration again after any change in camera framing or bed pose.",
+  "printer_xyz_from_stereo_xyz1": [
+    [
+      1.003893034809626,
+      0.022385993605283698,
+      0.0,
+      2.044530347757173
+    ],
+    [
+      -0.006517428118749778,
+      1.0211804590266174,
+      0.0,
+      -5.248000349812834
+    ],
+    [
+      0.014655580823378275,
+      0.010305619635182095,
+      1.0403080393535267,
+      -10.517532555959512
+    ]
+  ],
+  "paper_plane_stereo": [
+    0.014085643227838271,
+    0.009904846704637019,
+    0.9998517333418069,
+    -10.070074142396674
+  ],
+  "registration_points": [
+    {
+      "mark": "A",
+      "stereo_xyz_mm": [
+        -2.08539384,
+        2.18806473,
+        10.07927023
+      ],
+      "printer_xy_mm": [
+        0,
+        -3
+      ]
+    },
+    {
+      "mark": "B",
+      "stereo_xyz_mm": [
+        156.33261335,
+        45.30725839,
+        7.42036747
+      ],
+      "printer_xy_mm": [
+        160,
+        40
+      ]
+    },
+    {
+      "mark": "C",
+      "stereo_xyz_mm": [
+        -3.21563287,
+        142.21486654,
+        8.70804306
+      ],
+      "printer_xy_mm": [
+        2,
+        140
+      ]
+    }
+  ],
+  "z_reference": {
+    "printer_xy_mm": [
+      159,
+      143
+    ],
+    "shim_mm": 3.1,
+    "toolhead_z_mm": 3.06,
+    "paper_printer_z_mm": -0.04,
+    "tall_reference_mm": 82,
+    "toolhead_z_at_tall_reference_mm": 82.06
+  },
+  "blue_dot_validation": {
+    "predicted_printer_xy_mm": [
+      60.35794220527267,
+      90.26246148329477
+    ],
+    "observed_printer_xy_mm": [
+      60.4,
+      91.3
+    ]
+  },
+  "capture_printer_y_mm": 222.94,
+  "z_height_correction": {
+    "scale": 1.040462305222498,
+    "stereo_fit_heights_above_paper_mm": [
+      25.2,
+      78.3,
+      98.66894584
+    ],
+    "reference_fit_heights_above_paper_mm": [
+      27.0,
+      82.0,
+      102.04
+    ],
+    "held_out_checks": [
+      {
+        "uncorrected_printer_z_mm": 64.59153821758989,
+        "corrected_printer_xyz_mm": [
+          167.93279803,
+          139.20122139,
+          67.20667924394955
+        ],
+        "nozzle_contact_printer_xyz_mm": [
+          167.0,
+          139.0,
+          67.0
+        ]
+      },
+      {
+        "uncorrected_printer_z_mm": 64.15697997760306,
+        "corrected_printer_xyz_mm": [
+          164.54874083,
+          35.83101834,
+          66.75453777581941
+        ],
+        "nozzle_contact_printer_xyz_mm": [
+          164.0,
+          35.8,
+          67.0
+        ]
+      }
+    ]
+  }
+}

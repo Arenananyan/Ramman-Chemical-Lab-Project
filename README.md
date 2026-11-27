@@ -66,6 +66,42 @@ The eight-pair fit measured the 27 mm target within about 2 mm in the
 tested placements. A separate cup-rim check after rehoming gave 27.1 mm
 from stereo and 27 mm by caliper. These checks apply to the tested points.
 
+### Measure a marked point in printer coordinates
+
+Use [the November 27 printer registration](vision/raman-printer-registration-20261127.json)
+with the November 24 stereo calibration above. The registration expects the
+same camera framing and the bed stopped at **printer Y = 222.94 mm during
+capture**. The resulting Y is the target's printer coordinate.
+
+Have Codex identify the **same physical mark** in both images and return its
+pixel coordinates. Use the calibration camera order described above. For a
+combined capture, split the two views first so each coordinate is measured
+from its own image's top-left corner. Use **1024 × 576** per view. If you
+resize the full views from the same framing, locate the pixels after resizing.
+
+With the vision dependencies installed, call this from the repository root.
+The example replays the 67 mm reference at the corner.
+
+```sh
+python3 vision/measure_point.py \
+  --left 445.5 103 --right 408 109.5 \
+  --image-size 1024 576 --capture-y 222.94
+```
+
+The command returns JSON with `printer_xyz_mm` and the per-view
+`reprojection_error_px`. For this example, XYZ is approximately
+`(164.55, 35.83, 66.75)` mm. Pass the numeric arguments as separate
+subprocess arguments on the website backend. Read stdout only on success
+and surface the error message on failure. If Codex cannot identify the
+same mark in both views, have the operator select it.
+
+The matrix includes the **1.04046 height scale** and **−0.04 mm paper
+offset** for the stock nozzle. Two checks with the 67 mm target agreed
+with nozzle contact within 0.25 mm in Z. Reprojection error describes the
+pixel match and cannot establish physical accuracy by itself. The command
+returns a surface estimate. Apply travel clearance and any Raman probe
+offset separately in the motion workflow.
+
 Install the Python dependencies and run the synthetic tests.
 
 ```sh
