@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ramman Lab · Experiment desk</title>
 <link rel="stylesheet" href="style.css?v=experiment-1">
-<script src="app.js?v=experiment-1" defer></script>
+<script src="app.js?v=full-resolution-1" defer></script>
 <script src="experiment.js?v=groq-1" defer></script>
 </head>
 <body><main>
@@ -46,7 +46,7 @@
 <button id="stop" disabled>Stop cameras</button>
 <label for="camera-resolution">Camera resolution</label>
 <select id="camera-resolution">
-  <option value="preview">High-resolution preview</option>
+  <option value="preview">Full HD · 1920 × 1080 per camera</option>
   <option value="calibrated">Calibrated pair · 1024 × 576</option>
 </select>
 <div class="exposure">
@@ -65,7 +65,7 @@
 <div class="viewport"><video id="right-video" autoplay muted playsinline aria-label="Right webcam preview"></video><canvas id="right-display" class="digital-display" aria-hidden="true" hidden></canvas><p id="right-empty">Waiting for right camera</p></div></article>
 </section>
 <section class="capture-bar"><div><h2>Capture a pair</h2><p>Save both current frames together or as individual PNGs.</p><small>Browser captures are approximate in time. Hardware synchronization requires camera support.</small></div><button id="capture" class="primary" disabled>Capture pair ↗</button></section>
-<section id="result" hidden><div class="heading"><h2>Latest capture</h2><div class="downloads"><a id="pair-download" download>Download pair</a><a id="left-download" download>Left PNG</a><a id="right-download" download>Right PNG</a></div></div><p id="details"></p><img id="preview" alt="Latest captured pair"></section>
+<section id="result" hidden><div class="heading"><h2>Latest capture</h2><div class="downloads"><a id="pair-download" download>Download pair PNG</a><a id="pair-full-size" target="_blank" rel="noopener">Open full-size pair</a><a id="left-download" download>Left PNG</a><a id="right-download" download>Right PNG</a></div></div><p id="details"></p><img id="preview" alt="Latest captured pair"></section>
 </div>
 </div>
 <footer>Live experiments save the input frames and fit to this computer.</footer>

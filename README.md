@@ -22,8 +22,12 @@ Command Line Tools and reads back manual mode, exposure 80, and gain 0.
 If the cameras move to another hub or port, check `ioreg -p IOUSB -w0` and
 update the location IDs in that script.
 
-**Capture pair** freezes both previews and provides downloads for the combined
-PNG and the original-size left and right PNGs. Capture times are approximate,
+**Capture pair** provides downloads for the combined PNG and the original-size
+left and right PNGs. **Full HD** requires 1920 × 1080 from both cameras and
+saves a 3840 × 1080 combined PNG. The in-page image fits the available screen
+width. Use **Download pair PNG** to share the original file, or **Open
+full-size pair** to inspect it. **Calibrated pair** captures at 1024 × 576
+per camera for the existing stereo calibration. Capture times are approximate,
 without hardware synchronization. Frames stay in the browser. Stop the cameras
 with **Stop cameras**, and stop the local server with Ctrl-C in Terminal.
 

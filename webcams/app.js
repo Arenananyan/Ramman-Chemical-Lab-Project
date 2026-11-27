@@ -7,6 +7,7 @@ const videos = Object.fromEntries(sides.map(side => [side, el(side + "-video")])
 const displays = Object.fromEntries(sides.map(side => [side, el(side + "-display")]));
 const streams = {left: null, right: null};
 const exposure = el("exposure");
+const resolution = el("camera-resolution");
 let generation = 0;
 let busy = false;
 let urls = [];
@@ -23,6 +24,7 @@ function live(side) {
 function buttons() {
   el("connect").disabled = busy;
   el("refresh").disabled = busy;
+  resolution.disabled = busy;
   el("stop").disabled = !busy && !sides.some(live);
   el("capture").disabled = busy || !sides.every(side => live(side) && videos[side].readyState >= 2);
   sides.forEach(side => {selects[side].disabled = busy || !selects[side].options.length;});
@@ -47,7 +49,9 @@ function explain(error) {
     NotAllowedError: "Camera access was denied. Allow cameras in the browser's site settings, then connect again.",
     NotReadableError: "Could not open a camera. Close other camera apps and check USB connections or bandwidth.",
     NotFoundError: "No camera was found. Check the USB connections and refresh devices.",
-    OverconstrainedError: "The selected camera is unavailable. Refresh devices and try again."
+    OverconstrainedError: resolution.value === "calibrated"
+      ? "The selected camera could not open at 1024 × 576. Check the devices and try again."
+      : "The selected camera could not open at native 1920 × 1080. Check its resolution support and USB connection."
   };
   return reasons[error.name] || error.message || "Camera connection failed.";
 }
@@ -70,12 +74,15 @@ async function listDevices() {
 }
 async function open(side, id, run) {
   if (!id) return;
-  const calibrated = el("camera-resolution").value === "calibrated";
+  const calibrated = resolution.value === "calibrated";
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: false,
     video: {
-      deviceId: {exact: id}, width: calibrated ? {exact: 1024} : {ideal: 1920},
-      height: calibrated ? {exact: 576} : {ideal: 1080}, frameRate: {ideal: 30}
+      deviceId: {exact: id},
+      width: {exact: calibrated ? 1024 : 1920},
+      height: {exact: calibrated ? 576 : 1080},
+      frameRate: {ideal: 30},
+      ...(calibrated ? {} : {resizeMode: {exact: "none"}})
     }
   });
   if (run !== generation) {
@@ -177,6 +184,10 @@ async function capture() {
   try {
     // Draw both frames in one event-loop turn before encoding either image.
     const brightness = exposure.valueAsNumber / 100;
+    if (resolution.value !== "calibrated" &&
+        sides.some(side => videos[side].videoWidth !== 1920 || videos[side].videoHeight !== 1080)) {
+      throw new Error("Both cameras must deliver 1920 × 1080 to save a full-resolution pair.");
+    }
     const frames = sides.map(side => {
       const canvas = document.createElement("canvas");
       canvas.width = videos[side].videoWidth;
@@ -201,8 +212,11 @@ async function capture() {
       el(name + "-download").href = urls[index];
       el(name + "-download").download = stamp + "-" + name + ".png";
     });
+    el("pair-download").textContent = `Download pair PNG · ${pair.width} × ${pair.height}`;
+    el("pair-full-size").href = urls[0];
     el("preview").src = urls[0];
-    el("details").textContent = new Date().toLocaleTimeString() + " · " +
+    el("details").textContent = new Date().toLocaleTimeString() +
+      ` · Saved pair ${pair.width} × ${pair.height} · ` +
       frames.map((frame, index) => sides[index] + " " + frame.width + " × " + frame.height).join(" / ");
     el("result").hidden = false;
     message("Pair captured. Download the frames for calibration or reconstruction.");
@@ -213,7 +227,7 @@ async function capture() {
   }
 }
 el("connect").addEventListener("click", connect);
-el("camera-resolution").addEventListener("change", () => {
+resolution.addEventListener("change", () => {
   if (sides.some(live)) connect();
 });
 el("stop").addEventListener("click", stop);
@@ -231,8 +245,8 @@ function renderPreviews(now) {
       const video = videos[side];
       if (!live(side) || video.readyState < 2 || !video.videoWidth) continue;
       const display = displays[side];
-      const width = Math.min(video.videoWidth, 960, video.clientWidth || video.videoWidth);
-      const height = Math.max(1, Math.round(width * video.videoHeight / video.videoWidth));
+      const width = video.videoWidth;
+      const height = video.videoHeight;
       if (display.width !== width) display.width = width;
       if (display.height !== height) display.height = height;
       drawExposure(display, video, brightness);
